@@ -1,9 +1,11 @@
 package com.kt5.mobilefront1;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.Intent;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
@@ -12,6 +14,9 @@ import android.os.Looper;
 import android.os.Message;
 import android.util.Log;
 import android.view.View;
+import android.widget.AbsListView;
+import android.widget.AdapterView;
+import android.widget.Button;
 import android.widget.ListView;
 import android.widget.ProgressBar;
 import android.widget.Toast;
@@ -31,6 +36,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
+    //버튼3개의 속성
+    private Button loginbtn, memberregisterbtn, itemregisterbtn;
+
     //최종 업데이트 시간을 저장하기 위한 변수
     private String updateTime;
     //현재 페이지번호,한페이지당 데이터 개수,전체 페이지개수를 저장할 변수
@@ -49,6 +57,8 @@ public class MainActivity extends AppCompatActivity {
     //ListView에 데이터를 공급해줄 Adapter
     private ItemAdapter itemAdapter;
 
+    //가장 하단에서 스크롤 했는지 여부를 저장하기 위한 변수
+    private Boolean lastItemVisibleFlag = false;
     //Looper는 메세지 시스템
     //메인 스레드에게 요청을 전송하는 핸들러
     Handler handler = new Handler(Looper.getMainLooper()){
@@ -265,6 +275,131 @@ public class MainActivity extends AppCompatActivity {
         itemList = new ArrayList<>();
         //뷰 찾아오기
         listView = (ListView)findViewById(R.id.listview);
+
+        listView.setOnScrollListener(new AbsListView.OnScrollListener() {
+            @Override
+            //i는 현재 스트롤 상태
+            public void onScrollStateChanged(AbsListView absListView, int i) {
+                if(i == AbsListView.OnScrollListener.SCROLL_STATE_IDLE && lastItemVisibleFlag){
+                    //다음 페이지의 데이터 가져오기
+                    //page 번호를 1 증가시켜서 다음 페이지의 데이터를 요청
+                    if (page >= totalPage) {
+                        Toast.makeText(MainActivity.this, "더이상의 데이터가 없습니다.",
+                                Toast.LENGTH_LONG).show();
+                    }else {
+                        page = page + 1;
+                        downloadview.setVisibility(View.VISIBLE);
+
+                        new Thread(){
+                            public  void  run(){
+                                 try {
+                                     //데이터 다운로드
+
+                                     //다운로드 받을 URL을 생성
+                                     //전송방식은 Get
+                                     //파라미터를 URL뒤에 ?하고 붙여 넣을 수 있음
+                                     //파라미터는 반드시 UTF-8로 인코딩되어야 함
+                                     //파라미터에 숫자 나 영문자를 제외한 부분이 있으면 인코딩 해주어야 함
+                                     //URLEncoder.encode("인코딩할 문자열","utf-8")
+                                     java.net.URL url = new java.net.URL
+                                             ("http://192.168.10.159:80/item/list?page=" +
+                                             page + "&size=" + size);
+                                        //연결객체생성
+                                     HttpURLConnection con = (HttpURLConnection) url.openConnection();
+                                     //옵션설정
+                                     //전송방식설정
+                                     con.setRequestMethod("GET");
+                                     con.setConnectTimeout(30000);
+                                     con.setUseCaches(false);
+
+                                     //문자열을 다운로드 받기 위한 스트림 생성
+                                     BufferedReader br = new BufferedReader
+                                             (new InputStreamReader(con.getInputStream()));
+                                     //다운로드 받은 문자열을 저장하기 위한 객체를 생성
+                                     StringBuilder sb = new StringBuilder();
+                                     //다운로드 시작
+                                     while (true){
+                                         //한줄가져오기
+                                         String line = br.readLine();
+                                         //읽어온 데이터가 없다면 중지
+                                         if(line == null){
+                                             break;
+                                         }
+                                         //읽은 데이터를 StringBuilder에 추가
+                                         sb.append(line + "\n");
+                                     }
+                                     //연결 객체 정리
+                                     br.close();
+                                     con.disconnect();
+                                     Log.e("다운로드 받은 문자열",sb.toString());
+                                     //다운로드 받은 데이터를 파싱
+                                     if(sb.toString().trim().length() > 0){
+                                         //문자열을 전체를 객체로 변환
+                                         JSONObject object = new JSONObject(sb.toString());
+                                         //error 값 가져오기
+                                         String error = object.getString("error");
+                                         if(error.equals("null")){
+                                             JSONArray ar = object.getJSONArray("itemList");
+                                             //데이터베이스에 대한 참조
+                                             SQLiteDatabase db = itemDB.getWritableDatabase();
+                                             //배열 순회
+                                             for(int i = 0; i<ar.length(); i++){
+                                                 JSONObject obj = ar.getJSONObject(i);
+
+                                                 ContentValues row = new ContentValues();
+                                                 Item item = new Item();
+
+                                                 Log.e("itemid", obj.getLong("itemid") +"");
+                                                 row.put("itemid", obj.getLong("itemid"));
+                                                 item.setItemid(obj.getLong("itemid"));
+
+                                                 row.put("itemname", obj.getString("itemname"));
+                                                 item.setItemname(obj.getString("itemname"));
+
+                                                 row.put("price", obj.getInt("price"));
+                                                 item.setPrice(obj.getInt("price"));
+
+                                                 row.put("description", obj.getString("description"));
+                                                 item.setDescription(obj.getString("description"));
+
+                                                 row.put("pictureurl", obj.getString("pictureurl"));
+                                                 item.setPictureurl(obj.getString("pictureurl"));
+
+                                                 row.put("email", obj.getString("email"));
+                                                 item.setEmail(obj.getString("email"));
+
+                                                 Log.e("x", row.toString());
+                                                 Log.e("y", item.toString());
+                                                 db.insert("item",null,row);
+                                                 itemList.add(item);
+                                             }
+                                     //다시 출력해달라고 요청
+                                             //데이터베이스에서 데이터를 다시 읽어서 재출력해도 되고
+                                             //현재 list에 새로 추가된 데이터만 추가해도 됨
+                                             handler.sendEmptyMessage(0);
+                                         }
+                                     }
+
+                                     //파싱한 데이터를 로컬 데이터베이스를 저장
+                                 }catch (Exception e){
+                                     Log.e("파싱한 데이터 ",e.getLocalizedMessage());
+                                 }
+                            }
+                        }.start();
+                    }
+
+                }
+            }
+
+            @Override
+            //i는 처음에 보여지는 데이터의 인덱스
+            //i1은 한 페이지에 보여지는 데이터 개수
+            //i2는 출력되어야 하는 전체 데이터 개수
+            public void onScroll(AbsListView absListView, int i, int i1, int i2) {
+                //마지막 부분에서 스크롤했는지 여부를 설정
+                lastItemVisibleFlag = i2 > 0 && i + i1 >= i2;
+            }
+        });
         downloadview = (ProgressBar)findViewById(R.id.downloadview);
 
         //기본출력을 위한 Adapter 생성과 설정
@@ -274,5 +409,73 @@ public class MainActivity extends AppCompatActivity {
 
         //스레드를 만들어서 실행
         new DataDisplayThread().start();
+
+        SwipeRefreshLayout swipeRefreshLayout =
+                (SwipeRefreshLayout) findViewById(R.id.swipe_layout);
+        //스와이프 리프레시 레이아웃에서 아래로 드래그 했을 때 수행되는 이벤트 처리
+        swipeRefreshLayout.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
+            @Override
+            public void onRefresh() {
+                downloadview.setVisibility(View.GONE);
+                swipeRefreshLayout.setRefreshing(false);
+                page = 1;
+                new DataDisplayThread().start();
+            }
+        });
+        //ListView의 항목을 클릭했을 때 처리
+        listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            //parent 가 listView
+            //view는 누른 항목의 뷰
+            //position은 인덱스
+            //id는 항목 뷰의 id
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                      //다른 Activity출력
+                Intent intent = new Intent(MainActivity.this, DetailActivity.class);
+                //넘겨줄 데이터 찾아오기
+                Item item = itemList.get(position);
+                Log.e("o", item.toString());
+                //intent에 데이터 넘기기
+                intent.putExtra("item", item);
+                startActivity(intent);
+            }
+        });
+
+        loginbtn = (Button) findViewById(R.id.loginbtn);
+        loginbtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if(loginbtn.getText().equals("로그인")){
+                    Intent intent = new Intent(
+                            MainActivity.this,LoginActivity.class);
+                    startActivity(intent);
+
+                    //loginbtn.setText("로그아웃");
+                }else {
+                    loginbtn.setText("로그인");
+                }
+
+            }
+        });
+        memberregisterbtn = (Button) findViewById(R.id.memberregisterbtn);
+        memberregisterbtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+               // if(loginbtn.getText().equals("로그아웃")){
+               // }
+                Intent intent = new Intent
+                        (MainActivity.this, MemberRegisterActivity.class);
+                        startActivity(intent);
+            }
+        });
+        itemregisterbtn = (Button) findViewById(R.id.itemregisterbtn);
+        itemregisterbtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent
+                        (MainActivity.this, ItemRegisterActivity.class);
+                startActivity(intent);
+            }
+        });
     }
 }
