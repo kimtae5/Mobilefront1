@@ -258,7 +258,25 @@ public class MainActivity extends AppCompatActivity {
 
         }
     }
+    //액티비티가 최상단에 보여질 때마다 호출되는 메서드
+    //onCreate 다음에 호출되는 메서드
+    @Override
+    public void onResume(){
+        super.onResume();
+        Log.e("resume", "나는 resume");
+        //로그인 여부를 확인해서 로그인 버튼의 텍스트를 수정
+        try {
+            FileInputStream fis = openFileInput("login.txt");
+            byte[] data = new byte[fis.available()];
+            fis.read(data);
+            String loginText = new String(data);
+            Log.e("로그인 정보", loginText);
 
+            loginbtn.setText("로그아웃");
+        }catch (Exception e){
+            loginbtn.setText("로그인");
+        }
+    }
 
     @Override
     //Activity가 만들어지면 호출되는 메서드
@@ -266,6 +284,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        Log.e("create", "나는 create");
         //페이지 번호와 한페이지에 보여질 데이터 개수 초기화
         page = 1;
         size = 15;
@@ -382,7 +401,7 @@ public class MainActivity extends AppCompatActivity {
 
                                      //파싱한 데이터를 로컬 데이터베이스를 저장
                                  }catch (Exception e){
-                                     Log.e("파싱한 데이터 ",e.getLocalizedMessage());
+                                     Log.e("데이터 가져오기 예외 ",e.getLocalizedMessage());
                                  }
                             }
                         }.start();
@@ -452,6 +471,8 @@ public class MainActivity extends AppCompatActivity {
 
                     //loginbtn.setText("로그아웃");
                 }else {
+                    //로그인 정보가 있는 파일을 삭제
+                    deleteFile("login.txt");
                     loginbtn.setText("로그인");
                 }
 
@@ -461,20 +482,32 @@ public class MainActivity extends AppCompatActivity {
         memberregisterbtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-               // if(loginbtn.getText().equals("로그아웃")){
-               // }
+               // if(loginbtn.getText().equals("로그인")){
                 Intent intent = new Intent
                         (MainActivity.this, MemberRegisterActivity.class);
                         startActivity(intent);
+               // }else{
+                //memberregisterbtn.setText("로그인중");
             }
         });
         itemregisterbtn = (Button) findViewById(R.id.itemregisterbtn);
         itemregisterbtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Intent intent = new Intent
-                        (MainActivity.this, ItemRegisterActivity.class);
-                startActivity(intent);
+                try {
+                    FileInputStream fis = openFileInput("login.txt");
+                    byte[] data = new byte[fis.available()];
+                    fis.read(data);
+                    Intent intent = new Intent
+                            (MainActivity.this, ItemRegisterActivity.class);
+                    startActivity(intent);
+
+                }catch (Exception e){
+                    Intent intent = new Intent
+                            (MainActivity.this, LoginActivity.class);
+                    startActivity(intent);
+
+                }
             }
         });
     }
